@@ -178,6 +178,7 @@ class ResponsiveGridList extends StatelessWidget {
   final bool squareCells, scroll;
   final MainAxisAlignment rowMainAxisAlignment;
   final bool shrinkWrap;
+  final bool sliver;
 
   const ResponsiveGridList({
     required this.desiredItemWidth,
@@ -187,97 +188,126 @@ class ResponsiveGridList extends StatelessWidget {
     required this.children,
     this.rowMainAxisAlignment = MainAxisAlignment.start,
     this.shrinkWrap = false,
+    this.sliver = false,
     Key? key,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (children.isEmpty) return Container();
+    double getWidth(constraints) {
+      if (sliver) {
+        return constraints.crossAxisExtent;
+      }
 
-        double width = constraints.maxWidth;
+      return constraints.maxWidth;
+    }
 
-        double N = (width - minSpacing) / (desiredItemWidth + minSpacing);
+    Widget builder(context, constraints) {
+      if (children.isEmpty) return Container();
 
-        int n;
-        double spacing, itemWidth;
+      double width = getWidth(constraints);
 
-        if (N % 1 == 0) {
-          n = N.floor();
-          spacing = minSpacing;
-          itemWidth = desiredItemWidth;
-        } else {
-          n = N.floor();
+      double N = (width - minSpacing) / (desiredItemWidth + minSpacing);
 
-          double dw =
-              width - (n * (desiredItemWidth + minSpacing) + minSpacing);
+      int n;
+      double spacing, itemWidth;
 
-          itemWidth = desiredItemWidth +
-              (dw / n) * (desiredItemWidth / (desiredItemWidth + minSpacing));
+      if (N % 1 == 0) {
+        n = N.floor();
+        spacing = minSpacing;
+        itemWidth = desiredItemWidth;
+      } else {
+        n = N.floor();
 
-          spacing = (width - itemWidth * n) / (n + 1);
+        double dw =
+            width - (n * (desiredItemWidth + minSpacing) + minSpacing);
+
+        itemWidth = desiredItemWidth +
+            (dw / n) * (desiredItemWidth / (desiredItemWidth + minSpacing));
+
+        spacing = (width - itemWidth * n) / (n + 1);
+      }
+
+      if (scroll) {
+        itemBuilder(context, index) {
+          //if (index * n >= children.length) return null;
+          //separator
+          if (index % 2 == 1) {
+            return SizedBox(
+              height: minSpacing,
+            );
+          }
+          //item
+          final rowChildren = <Widget>[];
+          index = index ~/ 2;
+          for (int i = index * n; i < (index + 1) * n; i++) {
+            if (i >= children.length) break;
+            rowChildren.add(children[i]);
+          }
+          return _ResponsiveGridListItem(
+            mainAxisAlignment: rowMainAxisAlignment,
+            itemWidth: itemWidth,
+            spacing: spacing,
+            squareCells: squareCells,
+            children: rowChildren,
+          );
         }
 
-        if (scroll) {
-          return ListView.builder(
-              shrinkWrap: shrinkWrap,
-              itemCount: (children.length / n).ceil() * 2 - 1,
-              itemBuilder: (context, index) {
-                //if (index * n >= children.length) return null;
-                //separator
-                if (index % 2 == 1) {
-                  return SizedBox(
-                    height: minSpacing,
-                  );
-                }
-                //item
-                final rowChildren = <Widget>[];
-                index = index ~/ 2;
-                for (int i = index * n; i < (index + 1) * n; i++) {
-                  if (i >= children.length) break;
-                  rowChildren.add(children[i]);
-                }
-                return _ResponsiveGridListItem(
-                  mainAxisAlignment: rowMainAxisAlignment,
-                  itemWidth: itemWidth,
-                  spacing: spacing,
-                  squareCells: squareCells,
-                  children: rowChildren,
-                );
-              });
-        } else {
-          final rows = <Widget>[];
+        int itemCount = (children.length / n).ceil() * 2 - 1;
+
+        if (sliver) {
+          return SliverList(
+            delegate: SliverChildBuilderDelegate(
+                itemBuilder,
+                childCount: itemCount),
+          );
+        }
+
+        return ListView.builder(
+            shrinkWrap: shrinkWrap,
+            itemCount: itemCount,
+            itemBuilder: itemBuilder);
+      } else {
+        final rows = <Widget>[];
+        rows.add(SizedBox(
+          height: minSpacing,
+        ));
+        //
+        for (int j = 0; j < (children.length / n).ceil(); j++) {
+          final rowChildren = <Widget>[];
+          //
+          for (int i = j * n; i < (j + 1) * n; i++) {
+            if (i >= children.length) break;
+            rowChildren.add(children[i]);
+          }
+          //
+          rows.add(_ResponsiveGridListItem(
+            mainAxisAlignment: rowMainAxisAlignment,
+            itemWidth: itemWidth,
+            spacing: spacing,
+            squareCells: squareCells,
+            children: rowChildren,
+          ));
+
           rows.add(SizedBox(
             height: minSpacing,
           ));
-          //
-          for (int j = 0; j < (children.length / n).ceil(); j++) {
-            final rowChildren = <Widget>[];
-            //
-            for (int i = j * n; i < (j + 1) * n; i++) {
-              if (i >= children.length) break;
-              rowChildren.add(children[i]);
-            }
-            //
-            rows.add(_ResponsiveGridListItem(
-              mainAxisAlignment: rowMainAxisAlignment,
-              itemWidth: itemWidth,
-              spacing: spacing,
-              squareCells: squareCells,
-              children: rowChildren,
-            ));
-
-            rows.add(SizedBox(
-              height: minSpacing,
-            ));
-          }
-
-          return Column(
-            children: rows,
-          );
         }
-      },
+
+        return Column(
+          children: rows,
+        );
+      }
+    }
+
+    if (sliver) {
+      return SliverLayoutBuilder(
+          builder: builder
+      );
+    }
+
+    return LayoutBuilder(
+      builder: builder
     );
   }
 }
